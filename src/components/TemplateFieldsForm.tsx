@@ -1,6 +1,6 @@
 // src/components/TemplateFieldsForm.tsx
 
-import type { TemplateField } from '../templates/templateConfig.ts';
+import type { TemplateField } from '../templates/templateConfig';
 
 interface TemplateFieldsFormProps {
   fields: TemplateField[];

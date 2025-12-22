@@ -24,7 +24,7 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
     id: 'customizable',
     name: '✨ Customizable',
     icon: '🎨',
-    description: 'Custom text, colors, and layout - full control',
+    description: 'Custom text, colors, and layout - full control over branding',
     hasAutoCaption: false,
     fields: [
       {
@@ -84,9 +84,9 @@ export const TEMPLATES: Record<string, TemplateConfig> = {
     id: 'polaroid',
     name: '📷 Polaroid',
     icon: '📸',
-    description: 'Professional before/after layout - auto-generated',
+    description: 'Premium scrapbook-style with colored pencils and paperclip',
     hasAutoCaption: true,
-    fields: [] // No custom fields for Polaroid
+    fields: []
   }
 };
 
