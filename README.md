@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dog Coloring Books - Frontend
 
 Modern React application for managing dog coloring book content generation, batch processing, and Instagram scheduling.
@@ -510,3 +511,7 @@ MIT License - See LICENSE file for details
 **Last Updated:** December 2025  
 **Status:** Production  
 **Current Version:** 1.0.0
+=======
+# justin-project-frontend
+React 19 TypeScript frontend for dog coloring book marketing automation.  Intuitive UI for single/bulk image generation, real-time preview,  and Instagram scheduling. Responsive design with Tailwind CSS. Tech: React 19 | TypeScript | Vite | Tailwind CSS
+>>>>>>> 5e5179d6347c91d6b05d6025b598d6ae60e52e11
