@@ -137,9 +137,9 @@ export function SingleImageGenerator() {
       if (data.success || data.compositeImage) {
         setResult(prev => prev ? {
           ...prev,
-          compositeImageUrl: data.compositeImageUrl || data.url,
+          compositeImageUrl: data.compositeImageUrl || data.driveUrl || data.previewUrl || data.url,
           compositeImageBase64: data.compositeImageBase64 || data.imageBase64,
-          compositeMimeType: data.compositeMimeType || data.mimeType || 'image/png'
+          compositeMimeType: data.compositeMimeType || 'image/png'
         } : null);
         alert('✅ Marketing composite generated!');
       } else {

@@ -266,7 +266,7 @@ export function BulkImageGenerator() {
               ...i,
               compositeStatus: 'ready',
               compositeImage: `data:${data.compositeMimeType || 'image/png'};base64,${data.compositeImageBase64 || data.imageBase64}`,
-              compositeImageUrl: data.compositeImageUrl || data.url
+              compositeImageUrl: data.compositeImageUrl || data.driveUrl || data.previewUrl || data.url
             } : i
           ));
         } else {
