@@ -9,8 +9,11 @@ interface BulkItem {
   originalImageUrl?: string;
   generatedImage?: string;
   generatedImageUrl?: string;
+  compositeImage?: string;
+  compositeImageUrl?: string;
   caption?: string;
   status: 'pending' | 'generating' | 'ready' | 'approved' | 'rejected' | 'scheduled';
+  compositeStatus?: 'pending' | 'generating' | 'ready';
   error?: string;
 }
 
@@ -71,6 +74,7 @@ export function BulkImageGenerator() {
     setIsGenerating(true);
 
     const pending = items.filter(i => i.status === 'pending');
+    console.log(`🚀 Generating ${pending.length} items...`);
 
     for (const item of pending) {
       setItems(prev => prev.map(i => 
@@ -91,6 +95,9 @@ export function BulkImageGenerator() {
           continue;
         }
 
+        console.log(`📸 Generating for: ${item.dogName}`);
+        console.log('Webhook URL:', `${N8N_BASE_URL}/generate-single`);
+
         const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -102,10 +109,18 @@ export function BulkImageGenerator() {
           })
         });
 
-        const data = await response.json();
+        console.log(`Response status for ${item.dogName}:`, response.status);
 
-        if (data.success && data.results[0]) {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log(`✅ Data for ${item.dogName}:`, data);
+
+        if (data.success && data.results?.[0]) {
           const result = data.results[0];
+          console.log(`🎨 Generated composite:`, data.generatedImageUrl);
           
           setItems(prev => prev.map(i =>
             i.id === item.id ? {
@@ -117,8 +132,11 @@ export function BulkImageGenerator() {
               caption: result.caption
             } : i
           ));
+        } else {
+          throw new Error('Invalid response: ' + JSON.stringify(data));
         }
       } catch (error) {
+        console.error(`❌ Error for ${item.dogName}:`, error);
         setItems(prev => prev.map(i =>
           i.id === item.id ? { 
             ...i, 
@@ -201,6 +219,68 @@ export function BulkImageGenerator() {
     } finally {
       setIsScheduling(false);
     }
+  };
+
+  const handleGenerateComposites = async () => {
+    setIsGenerating(true);
+
+    const readyItems = items.filter(i => i.status === 'ready' && !i.compositeImageUrl);
+    console.log(`🎨 Generating ${readyItems.length} composites...`);
+
+    for (const item of readyItems) {
+      setItems(prev => prev.map(i =>
+        i.id === item.id ? { ...i, compositeStatus: 'generating' } : i
+      ));
+
+      try {
+        if (!item.originalImageUrl || !item.generatedImageUrl) {
+          throw new Error('Missing image URLs');
+        }
+
+        console.log(`📸 Generating composite for: ${item.dogName}`);
+
+        const response = await fetch(`${N8N_BASE_URL}/create-marketing-composite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dogName: item.dogName,
+            originalImageUrl: item.originalImageUrl,
+            generatedImageUrl: item.generatedImageUrl,
+            caption: item.caption,
+            template: selectedTemplate
+          })
+        });
+
+        console.log(`Response status for ${item.dogName}:`, response.status);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log(`✅ Composite for ${item.dogName}:`, data);
+
+        if (data.success || data.compositeImage) {
+          setItems(prev => prev.map(i =>
+            i.id === item.id ? {
+              ...i,
+              compositeStatus: 'ready',
+              compositeImage: `data:${data.compositeMimeType || 'image/png'};base64,${data.compositeImageBase64 || data.imageBase64}`,
+              compositeImageUrl: data.compositeImageUrl || data.url
+            } : i
+          ));
+        } else {
+          throw new Error('Invalid response: ' + JSON.stringify(data));
+        }
+      } catch (error) {
+        console.error(`❌ Composite error for ${item.dogName}:`, error);
+        setItems(prev => prev.map(i =>
+          i.id === item.id ? { ...i, compositeStatus: 'pending', error: error instanceof Error ? error.message : 'Failed' } : i
+        ));
+      }
+    }
+
+    setIsGenerating(false);
   };
 
   const readyCount = items.filter(i => i.status === 'ready').length;
@@ -369,6 +449,16 @@ export function BulkImageGenerator() {
               Approve All
             </button>
             <button
+              onClick={handleGenerateComposites}
+              disabled={readyCount === 0 || isGenerating}
+              className="flex-1 md:flex-none bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+              </svg>
+              {isGenerating ? 'Generating...' : 'Generate Composites'}
+            </button>
+            <button
               onClick={handleScheduleAll}
               disabled={approvedCount === 0 || isScheduling}
               className="flex-1 md:flex-none bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -396,9 +486,11 @@ export function BulkImageGenerator() {
             }`}
           >
             <div className="relative aspect-square bg-gray-100 dark:bg-gray-900 flex items-center justify-center overflow-hidden">
-              {item.generatedImage ? (
-                <img src={item.generatedImage} alt={item.dogName} className="h-full w-full object-cover" />
-              ) : item.status === 'generating' ? (
+              {item.compositeImage ? (
+                <img src={item.compositeImage} alt={`${item.dogName} composite`} className="h-full w-full object-cover" title="Marketing Composite" />
+              ) : item.generatedImage ? (
+                <img src={item.generatedImage} alt={item.dogName} className="h-full w-full object-cover" title="Coloring Page" />
+              ) : item.status === 'generating' || item.compositeStatus === 'generating' ? (
                 <div className="flex flex-col items-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-purple-600 mb-3"></div>
                   <p className="text-xs text-gray-600 dark:text-gray-400">Generating...</p>
@@ -423,9 +515,16 @@ export function BulkImageGenerator() {
               )}
 
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-xs font-bold px-2 py-1 rounded border ${getStatusColor(item.status)}`}>
-                  {item.status.toUpperCase()}
-                </span>
+                <div className="flex gap-1">
+                  <span className={`text-xs font-bold px-2 py-1 rounded border ${getStatusColor(item.status)}`}>
+                    {item.status.toUpperCase()}
+                  </span>
+                  {item.compositeStatus === 'ready' && (
+                    <span className="text-xs font-bold px-2 py-1 rounded border bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+                      COMPOSITE
+                    </span>
+                  )}
+                </div>
 
                 {item.status === 'ready' && (
                   <div className="flex gap-2">
