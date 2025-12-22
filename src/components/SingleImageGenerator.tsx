@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const N8N_BASE_URL = 'http://localhost:5678/webhook';
+const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || 'http://localhost:5678/webhook';
 
 export function SingleImageGenerator() {
   // ✅ TEMPLATE SELECTION - MOVED INSIDE COMPONENT
