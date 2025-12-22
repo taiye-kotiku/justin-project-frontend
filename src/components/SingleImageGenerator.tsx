@@ -2,588 +2,230 @@ import { useState } from 'react';
 
 const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || 'http://localhost:5678/webhook';
 
+interface GenerationResult {
+  originalImageUrl?: string;
+  generatedImageUrl?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  caption?: string;
+}
+
 export function SingleImageGenerator() {
-  // ✅ TEMPLATE SELECTION - MOVED INSIDE COMPONENT
-  const [selectedTemplate, setSelectedTemplate] = useState<'customizable' | 'polaroid'>('customizable');
-  
   const [dogName, setDogName] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  
+  const [, setPreview] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isCreatingComposite, setIsCreatingComposite] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
-  
-  // Generated coloring book data
-  const [originalImageUrl, setOriginalImageUrl] = useState('');
-  const [generatedImage, setGeneratedImage] = useState('');
-  const [generatedImageUrl, setGeneratedImageUrl] = useState('');
-  const [caption, setCaption] = useState('');
-  
-  // Marketing composite customization (shown after generation)
-  const [showCustomization, setShowCustomization] = useState(false);
-  const [headerLine1, setHeaderLine1] = useState('TURN ONE PICTURE OF YOUR DOG INTO');
-  const [headerLine2, setHeaderLine2] = useState('ONE HUNDRED PICTURES OF YOUR DOG!');
-  const [arrowText, setArrowText] = useState('←---STARTING IMAGE');
-  const [websiteText, setWebsiteText] = useState('dogcoloringbooks.com');
-  const [circleColor, setCircleColor] = useState('#7C3AED');
-  const [backgroundColor, setBackgroundColor] = useState('#FFFFFF');
-  
-  // Final marketing image
-  const [marketingImageUrl, setMarketingImageUrl] = useState('');
-  const [marketingImagePreview, setMarketingImagePreview] = useState('');
-  
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [result, setResult] = useState<GenerationResult | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setError('');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleGenerate = async () => {
-    if (!imageFile || !dogName) {
-      setError('Please provide both dog name and photo!');
+    if (!dogName || !imageFile) {
+      alert('Please fill in dog name and upload an image');
       return;
     }
 
     setIsGenerating(true);
-    setError('');
-    setGeneratedImage('');
 
     try {
-      // Convert to base64
       const reader = new FileReader();
       reader.readAsDataURL(imageFile);
-      
-      await new Promise((resolve) => {
-        reader.onloadend = resolve;
-      });
+      reader.onloadend = async () => {
+        const imageBase64 = (reader.result as string).split(',')[1];
 
-      const base64 = (reader.result as string).split(',')[1];
+        const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dogName,
+            imageUrl: `data:${imageFile.type};base64,${imageBase64}`,
+            themes: ['A fun coloring book adventure'],
+            petHandle: instagramHandle
+          })
+        });
 
-      // Call n8n webhook
-      const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dogName,
-          imageUrl: `data:image/jpeg;base64,${base64}`,
-          themes: ['A fun coloring book adventure'],
-          petHandle: instagramHandle
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Generation failed');
-      }
-
-      const result = data.results[0];
-      
-      setOriginalImageUrl(data.originalImageUrl);
-      setGeneratedImage(`data:${result.mimeType};base64,${result.imageBase64}`);
-      setGeneratedImageUrl(data.generatedImageUrl);
-      setCaption(result.caption);
-      setSuccess('✅ Coloring book generated! Now customize your marketing text...');
-      
-      // Show customization panel
-      setShowCustomization(true);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed');
+        const data = await response.json();
+        if (data.success && data.results[0]) {
+          const res = data.results[0];
+          setResult({
+            originalImageUrl: data.originalImageUrl,
+            generatedImageUrl: data.generatedImageUrl,
+            imageBase64: res.imageBase64,
+            mimeType: res.mimeType,
+            caption: res.caption
+          });
+        }
+      };
+    } catch (error) {
+      console.error('Error generating:', error);
+      alert('Generation failed');
     } finally {
       setIsGenerating(false);
     }
   };
 
-// ============================================
-// REPLACE THIS FUNCTION IN SingleImageGenerator.tsx
-// ============================================
-
-  const handleCreateMarketingImage = async () => {
-    if (!generatedImage) {
-      setError('Missing generated image');
-      return;
-    }
-
-    setIsCreatingComposite(true);
-    setError('');
-
-    try {
-      // Extract base64 from the data URLs
-      // generatedImage is: "data:image/jpeg;base64,xxxxx"
-      // previewUrl is: "blob:..." (we need the original base64 instead)
-      
-      // Get the original image base64 from the file
-      let originalBase64 = '';
-      if (imageFile) {
-        const reader = new FileReader();
-        reader.readAsDataURL(imageFile);
-        await new Promise((resolve) => {
-          reader.onloadend = () => {
-            originalBase64 = (reader.result as string).split(',')[1];
-            resolve(null);
-          };
-        });
-      }
-
-      // Get generated image base64
-      const generatedBase64 = generatedImage.split(',')[1];
-
-      if (!originalBase64 || !generatedBase64) {
-        setError('Failed to extract image data');
-        return;
-      }
-
-      // Determine endpoint based on selected template
-      let endpoint = '/api/create-marketing-image';
-      let payload: Record<string, string> = {
-        originalImageBase64: originalBase64,
-        coloringImageBase64: generatedBase64,
-        dogName: dogName,
-      };
-
-      if (selectedTemplate === 'customizable') {
-        endpoint = '/api/create-marketing-image';
-        payload = {
-          ...payload,
-          headerLine1,
-          headerLine2,
-          arrowText,
-          websiteText,
-          circleColor,
-          backgroundColor
-        };
-      } else if (selectedTemplate === 'polaroid') {
-        endpoint = '/api/generate-rebel-composite';
-        // Polaroid template doesn't need extra customization fields
-      }
-
-      console.log(`Creating ${selectedTemplate} marketing image...`);
-      console.log(`Original base64 length: ${originalBase64.length}`);
-      console.log(`Generated base64 length: ${generatedBase64.length}`);
-
-      // Call backend to create marketing composite
-      const response = await fetch(`https://justin-project-backend.onrender.com${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to create marketing image');
-      }
-
-      console.log(`✅ ${selectedTemplate} image created!`);
-      console.log(`Response mimeType: ${data.mimeType}`);
-
-      setMarketingImagePreview(`data:${data.mimeType};base64,${data.imageBase64}`);
-      setMarketingImageUrl('composite-ready'); // Mark as ready
-      setSuccess(`✅ ${selectedTemplate === 'customizable' ? 'Customizable' : 'Polaroid'} marketing image created! Ready to post.`);
-
-    } catch (err) {
-      console.error('Error creating marketing image:', err);
-      setError(err instanceof Error ? err.message : 'Failed to create marketing image');
-    } finally {
-      setIsCreatingComposite(false);
-    }
-  };
-
-  const handlePost = async () => {
-    if (!marketingImageUrl) {
-      setError('No marketing image to post');
-      return;
-    }
-
-    setIsPosting(true);
-    setError('');
-
-    try {
-      const response = await fetch(`${N8N_BASE_URL}/post-marketing-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: marketingImageUrl,
-          caption,
-          dogName,
-          originalImageUrl,
-          generatedImageUrl,
-          template: selectedTemplate
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Posting failed');
-      }
-
-      setSuccess('🎉 Posted to Instagram successfully!');
-      
-      setTimeout(() => {
-        handleReset();
-      }, 2000);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Posting failed');
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  const handleReset = () => {
-    setDogName('');
-    setInstagramHandle('');
-    setImageFile(null);
-    setPreviewUrl('');
-    setOriginalImageUrl('');
-    setGeneratedImage('');
-    setGeneratedImageUrl('');
-    setCaption('');
-    setShowCustomization(false);
-    setMarketingImageUrl('');
-    setMarketingImagePreview('');
-    setError('');
-    setSuccess('');
-    // Reset to defaults
-    setHeaderLine1('TURN ONE PICTURE OF YOUR DOG INTO');
-    setHeaderLine2('ONE HUNDRED PICTURES OF YOUR DOG!');
-    setArrowText('←---STARTING IMAGE');
-    setWebsiteText('dogcoloringbooks.com');
-    setCircleColor('#7C3AED');
-    setBackgroundColor('#FFFFFF');
-  };
-
   return (
-    <div className="space-y-8">
-      
-      {/* Step 1: Upload & Generate Coloring Book */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Input Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">
-              📝 Step 1: Dog Details
-            </h2>
-            {generatedImage && (
-              <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
-                ✓ Generated
-              </span>
-            )}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Left Column - Input Form */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 flex flex-col h-full">
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Step 1: Dog Details</h2>
+        </div>
+
+        <form className="space-y-6 flex-grow">
+          <div>
+            <label htmlFor="dogName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Dog Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="dogName"
+              type="text"
+              value={dogName}
+              onChange={(e) => setDogName(e.target.value)}
+              placeholder="e.g., Buddy"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:text-white outline-none shadow-sm"
+            />
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Dog Name *
-              </label>
+          <div>
+            <label htmlFor="instagram" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Instagram Handle <span className="text-gray-400 font-normal">(Optional)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">@</span>
               <input
-                type="text"
-                value={dogName}
-                onChange={(e) => setDogName(e.target.value)}
-                placeholder="e.g., Buddy"
-                disabled={isGenerating || !!generatedImage}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:bg-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Instagram Handle <span className="text-gray-400 font-normal">(Optional)</span>
-              </label>
-              <input
+                id="instagram"
                 type="text"
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
-                placeholder="@buddys_adventures"
-                disabled={isGenerating || !!generatedImage}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:bg-gray-100"
+                placeholder="buddys_adventures"
+                className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:text-white outline-none shadow-sm"
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Upload Photo *
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                disabled={isGenerating || !!generatedImage}
-                className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer disabled:opacity-50"
-              />
-              {previewUrl && (
-                <img 
-                  src={previewUrl} 
-                  alt="Preview" 
-                  className="mt-4 w-full h-48 object-cover rounded-lg border-2 border-gray-200"
-                />
-              )}
-            </div>
-
-            {!generatedImage ? (
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating || !imageFile || !dogName}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-6 rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isGenerating ? '⏳ Generating...' : '✨ Generate Coloring Page'}
-              </button>
-            ) : (
-              <button
-                onClick={handleReset}
-                className="w-full bg-gray-600 text-white font-bold py-4 px-6 rounded-lg hover:bg-gray-700 transition-all"
-              >
-                🔄 Start Over
-              </button>
-            )}
           </div>
-        </div>
 
-        {/* Preview Section */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">
-            🎨 Coloring Book Preview
-          </h2>
-
-          {!generatedImage && !isGenerating && (
-            <div className="flex items-center justify-center h-96 border-2 border-dashed border-gray-300 rounded-lg">
-              <p className="text-gray-400">Your coloring page will appear here...</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Upload Photo <span className="text-red-500">*</span>
+            </label>
+            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 transition-colors group cursor-pointer bg-gray-50 dark:bg-gray-900/50">
+              <div className="space-y-1 text-center">
+                <svg className="mx-auto h-12 w-12 text-gray-400 group-hover:text-purple-500 transition-colors" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                  <path d="M28 8H12a4 4 0 00-4 4v20a4 4 0 004 4h24a4 4 0 004-4V20m-18-12l-4 4m4-4l4 4m-4-4v12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <div className="flex text-sm text-gray-600 dark:text-gray-400 justify-center">
+                  <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-purple-500 hover:text-purple-600">
+                    <span>Upload a file</span>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="sr-only"
+                    />
+                  </label>
+                  <p className="pl-1">or drag and drop</p>
+                </div>
+                <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+              </div>
             </div>
-          )}
-
-          {isGenerating && (
-            <div className="flex flex-col items-center justify-center h-96">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
-              <p className="text-gray-600 font-semibold">Creating your coloring page...</p>
+            <div className="mt-3 flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50">
+              <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                For best results, use a photo with good lighting where the dog's face is clearly visible.
+              </p>
             </div>
-          )}
+          </div>
+        </form>
 
-          {generatedImage && (
-            <img
-              src={generatedImage}
-              alt="Generated"
-              className="w-full rounded-lg border-2 border-gray-200"
-            />
-          )}
+        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !dogName || !imageFile}
+            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM15.657 14.243a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM11 17a1 1 0 102 0v-1a1 1 0 10-2 0v1zM5.757 15.657a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM2 10a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.757 4.343a1 1 0 00-1.414 1.414l.707.707a1 1 0 001.414-1.414l-.707-.707z" />
+            </svg>
+            {isGenerating ? 'Generating...' : 'Generate Coloring Page'}
+          </button>
         </div>
       </div>
 
-      {/* Step 2: Select Template & Customize Marketing Text */}
-      {showCustomization && !marketingImageUrl && (
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl shadow-lg p-8">
-          
-          {/* Template Selection Toggle */}
-          <div className="mb-8 p-4 bg-white rounded-lg border-2 border-gray-200">
-            <label className="block text-sm font-semibold mb-4">📋 Select Marketing Template:</label>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setSelectedTemplate('customizable')}
-                className={`flex-1 py-4 px-4 rounded-lg font-semibold transition-all ${
-                  selectedTemplate === 'customizable'
-                    ? 'bg-purple-600 text-white border-2 border-purple-600'
-                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-purple-400'
-                }`}
-              >
-                <div className="text-lg">✨ Customizable</div>
-                <div className="text-xs mt-1">Custom text & colors</div>
-              </button>
-              <button
-                onClick={() => setSelectedTemplate('polaroid')}
-                className={`flex-1 py-4 px-4 rounded-lg font-semibold transition-all ${
-                  selectedTemplate === 'polaroid'
-                    ? 'bg-indigo-600 text-white border-2 border-indigo-600'
-                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-400'
-                }`}
-              >
-                <div className="text-lg">📷 Polaroid</div>
-                <div className="text-xs mt-1">Professional before/after</div>
-              </button>
-            </div>
+      {/* Right Column - Preview */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 flex flex-col h-full">
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M5 3a2 2 0 00-2 2v6h6V5a2 2 0 00-2-2H5zM15 3a2 2 0 00-2 2v6h6V5a2 2 0 00-2-2h-2zM5 13a2 2 0 00-2 2v2h6v-2a2 2 0 00-2-2H5zM15 13a2 2 0 00-2 2v2h6v-2a2 2 0 00-2-2h-2z" />
+            </svg>
           </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Preview & Result</h2>
+        </div>
 
-          {/* Customization Panel - Only show for customizable template */}
-          {selectedTemplate === 'customizable' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">
-                ✏️ Step 2: Customize Marketing Text
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Header Line 1
-                  </label>
-                  <input
-                    type="text"
-                    value={headerLine1}
-                    onChange={(e) => setHeaderLine1(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Header Line 2
-                  </label>
-                  <input
-                    type="text"
-                    value={headerLine2}
-                    onChange={(e) => setHeaderLine2(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Arrow Text
-                  </label>
-                  <input
-                    type="text"
-                    value={arrowText}
-                    onChange={(e) => setArrowText(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Website Text
-                  </label>
-                  <input
-                    type="text"
-                    value={websiteText}
-                    onChange={(e) => setWebsiteText(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Circle Border Color
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={circleColor}
-                      onChange={(e) => setCircleColor(e.target.value)}
-                      className="w-16 h-12 rounded cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={circleColor}
-                      onChange={(e) => setCircleColor(e.target.value)}
-                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Background Color
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={backgroundColor}
-                      onChange={(e) => setBackgroundColor(e.target.value)}
-                      className="w-16 h-12 rounded cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={backgroundColor}
-                      onChange={(e) => setBackgroundColor(e.target.value)}
-                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg"
-                    />
-                  </div>
-                </div>
+        <div className="flex-grow flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 p-12 text-center min-h-[400px] relative overflow-hidden group">
+          {result?.generatedImageUrl ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <img
+                src={`data:${result.mimeType};base64,${result.imageBase64}`}
+                alt={dogName}
+                className="h-full w-full object-contain rounded-lg"
+              />
+            </div>
+          ) : isGenerating ? (
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-purple-600 mb-4"></div>
+              <p className="text-gray-600 dark:text-gray-400">Generating your coloring page...</p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">This usually takes 15-25 seconds</p>
+            </div>
+          ) : (
+            <div className="z-10 relative">
+              <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
               </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No preview available</h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                Fill in the details on the left and click "Generate" to see your custom coloring page appear here.
+              </p>
             </div>
           )}
-
-          {/* Info for Polaroid template */}
-          {selectedTemplate === 'polaroid' && (
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
-              <p className="text-blue-800 font-semibold">📷 Polaroid Template</p>
-              <p className="text-blue-700 text-sm mt-1">Professional before/after layout with original photo in Polaroid frame. No customization needed!</p>
-            </div>
-          )}
-
-          <button
-            onClick={handleCreateMarketingImage}
-            disabled={isCreatingComposite}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-4 px-6 rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
-          >
-            {isCreatingComposite ? '⏳ Creating Marketing Image...' : '🎨 Create Marketing Image'}
-          </button>
         </div>
-      )}
 
-      {/* Step 3: Final Marketing Image & Post */}
-      {marketingImageUrl && (
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">
-            📸 Step 3: Final Marketing Image
-          </h2>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div>
-              {marketingImagePreview && (
-                <img
-                  src={marketingImagePreview}
-                  alt="Marketing"
-                  className="w-full rounded-lg border-2 border-gray-200"
-                />
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Caption (Editable)
-                </label>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  rows={8}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"
-                />
-              </div>
-
-              <button
-                onClick={handlePost}
-                disabled={isPosting}
-                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold py-4 px-6 rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
-              >
-                {isPosting ? '⏳ Posting...' : '📸 Post to Instagram Now'}
-              </button>
-            </div>
-          </div>
+        <div className="mt-6 flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
+          <span className="flex items-center gap-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Avg. time: ~15-25s
+          </span>
+          <span className="flex items-center gap-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            High Res Output
+          </span>
         </div>
-      )}
-
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          <strong>Error:</strong> {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border-2 border-green-200 text-green-700 px-4 py-3 rounded-lg">
-          {success}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
