@@ -103,7 +103,7 @@ export function SingleImageGenerator() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const imageBase64 = (e.target?.result as string).split(',')[1];
+      const imageBase64 = (e.target?.result as string);
       console.log('📸 Image uploaded, generating coloring page...');
       handleGenerateColoring(imageBase64);
     };
@@ -436,7 +436,7 @@ export function SingleImageGenerator() {
             {selectedTemplate === 'polaroid' && (
               <div className="bg-pink-50 dark:bg-pink-900/20 border-2 border-pink-200 dark:border-pink-700 rounded-lg p-3">
                 <p className="text-sm text-pink-700 dark:text-pink-300">
-                  📷 <span className="font-semibold">Polaroid Template:</span> Professional before/after layout with automatic caption
+                  📷 <span className="font-semibold">Polaroid Template:</span> Professional scrapbook-style layout with decorative elements
                 </p>
               </div>
             )}
