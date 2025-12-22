@@ -1,14 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SingleImageGenerator } from './components/SingleImageGenerator.tsx';
 import { BulkImageGenerator } from './components/BulkImageGenerator.tsx';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('darkMode');
+      if (stored !== null) return stored === 'true';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    if (isDark) {
+      htmlElement.classList.add('dark');
+    } else {
+      htmlElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', String(isDark));
+  }, [isDark]);
 
   return (
-    <div className={isDark ? 'dark' : ''}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
         {/* Header */}
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 py-4 md:py-6 flex items-center justify-between">
@@ -87,18 +103,10 @@ function App() {
         <footer className="mt-16 py-8 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-center">
           <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400 text-sm">
             <span>Powered by AI</span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              Built with{' '}
-              <svg className="w-4 h-4 text-red-500 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-              </svg>
-            </span>
           </div>
         </footer>
       </div>
-    </div>
-  );
+    );
 }
 
 export default App;

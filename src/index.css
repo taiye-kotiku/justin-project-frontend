@@ -13,9 +13,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
-  background-color: #f9fafb;
-  color: #111827;
-  transition: color 0.2s, background-color 0.2s;
+}
+
+html {
+  @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200;
 }
 
 #root {
@@ -26,7 +27,7 @@ body {
 /* Smooth transitions for dark mode */
 @media (prefers-reduced-motion: no-preference) {
   * {
-    transition: color 0.2s, background-color 0.2s;
+    @apply transition-colors duration-200;
   }
 }
 
@@ -37,16 +38,15 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
+  @apply bg-gray-100 dark:bg-gray-800;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #9ca3af;
-  border-radius: 4px;
+  @apply bg-gray-400 dark:bg-gray-600 rounded;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #6b7280;
+  @apply bg-gray-500 dark:bg-gray-500;
 }
 
 /* Firefox scrollbar */
