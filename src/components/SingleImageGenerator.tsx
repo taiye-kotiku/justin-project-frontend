@@ -171,7 +171,7 @@ export function SingleImageGenerator() {
       console.log(`Generated base64 length: ${generatedBase64.length}`);
 
       // Call backend to create marketing composite
-      const response = await fetch(`http://localhost:3001${endpoint}`, {
+      const response = await fetch(`https://justin-project-backend.onrender.com${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
