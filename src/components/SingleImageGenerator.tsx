@@ -8,6 +8,9 @@ interface GenerationResult {
   imageBase64?: string;
   mimeType?: string;
   caption?: string;
+  compositeImageUrl?: string;
+  compositeImageBase64?: string;
+  compositeMimeType?: string;
 }
 
 export function SingleImageGenerator() {
@@ -15,6 +18,8 @@ export function SingleImageGenerator() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingComposite, setIsGeneratingComposite] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<'customizable' | 'polaroid'>('customizable');
   const [result, setResult] = useState<GenerationResult | null>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,6 +92,64 @@ export function SingleImageGenerator() {
       console.error('❌ File read error:', error);
       alert('Failed to read file');
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateComposite = async () => {
+    if (!result?.originalImageUrl || !result?.generatedImageUrl) {
+      alert('Please generate the coloring page first');
+      return;
+    }
+
+    setIsGeneratingComposite(true);
+
+    try {
+      console.log('🎨 Generating marketing composite...');
+      console.log('Template:', selectedTemplate);
+      console.log('Original:', result.originalImageUrl);
+      console.log('Generated:', result.generatedImageUrl);
+
+      const endpoint = selectedTemplate === 'customizable' 
+        ? `${N8N_BASE_URL}/create-marketing-composite`
+        : `${N8N_BASE_URL}/create-marketing-composite`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dogName,
+          originalImageUrl: result.originalImageUrl,
+          generatedImageUrl: result.generatedImageUrl,
+          caption: result.caption,
+          template: selectedTemplate
+        })
+      });
+
+      console.log('Composite response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Composite response:', data);
+
+      if (data.success || data.compositeImage) {
+        setResult(prev => prev ? {
+          ...prev,
+          compositeImageUrl: data.compositeImageUrl || data.url,
+          compositeImageBase64: data.compositeImageBase64 || data.imageBase64,
+          compositeMimeType: data.compositeMimeType || data.mimeType || 'image/png'
+        } : null);
+        alert('✅ Marketing composite generated!');
+      } else {
+        throw new Error('Invalid response: ' + JSON.stringify(data));
+      }
+    } catch (error) {
+      console.error('❌ Composite generation error:', error);
+      alert(`Composite generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGeneratingComposite(false);
     }
   };
 
@@ -203,45 +266,108 @@ export function SingleImageGenerator() {
               <path d="M5 3a2 2 0 00-2 2v6h6V5a2 2 0 00-2-2H5zM15 3a2 2 0 00-2 2v6h6V5a2 2 0 00-2-2h-2zM5 13a2 2 0 00-2 2v2h6v-2a2 2 0 00-2-2H5zM15 13a2 2 0 00-2 2v2h6v-2a2 2 0 00-2-2h-2z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Preview & Result</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Preview & Marketing</h2>
         </div>
 
-        <div className="flex-grow flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 p-12 text-center min-h-[400px] relative overflow-hidden group">
-          {result?.generatedImageUrl ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <img
-                src={`data:${result.mimeType};base64,${result.imageBase64}`}
-                alt={dogName}
-                className="h-full w-full object-contain rounded-lg"
-              />
-            </div>
-          ) : isGenerating ? (
-            <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-purple-600 mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">Generating your coloring page...</p>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">This usually takes 15-25 seconds</p>
-            </div>
-          ) : (
-            <div className="z-10 relative">
-              <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+        {!result ? (
+          <div className="flex-grow flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900/50 p-12 text-center">
+            {isGenerating ? (
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-purple-600 mb-4"></div>
+                <p className="text-gray-600 dark:text-gray-400">Generating your coloring page...</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">This usually takes 15-25 seconds</p>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No preview available</h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
-                Fill in the details on the left and click "Generate" to see your custom coloring page appear here.
-              </p>
+            ) : (
+              <div className="z-10 relative">
+                <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No preview available</h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                  Fill in the details on the left and click "Generate" to see your custom coloring page appear here.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex-grow flex flex-col gap-6">
+            {/* Coloring Page */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Step 1: Coloring Page</h3>
+              <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900 aspect-square flex items-center justify-center">
+                <img
+                  src={`data:${result?.mimeType};base64,${result?.imageBase64}`}
+                  alt={dogName}
+                  className="h-full w-full object-contain"
+                />
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Template Selection & Composite */}
+            {!result?.compositeImageUrl ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Step 2: Marketing Template</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setSelectedTemplate('customizable')}
+                      className={`py-2 px-3 rounded-lg text-sm font-semibold transition-all border-2 ${
+                        selectedTemplate === 'customizable'
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-purple-400'
+                      }`}
+                    >
+                      <div>✨ Customizable</div>
+                      <div className="text-xs opacity-75">Custom text</div>
+                    </button>
+                    <button
+                      onClick={() => setSelectedTemplate('polaroid')}
+                      className={`py-2 px-3 rounded-lg text-sm font-semibold transition-all border-2 ${
+                        selectedTemplate === 'polaroid'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-indigo-400'
+                      }`}
+                    >
+                      <div>📷 Polaroid</div>
+                      <div className="text-xs opacity-75">Before/after</div>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGenerateComposite}
+                  disabled={isGeneratingComposite}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                  </svg>
+                  {isGeneratingComposite ? 'Generating Marketing...' : 'Generate Marketing Composite'}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Step 2: Marketing Composite ({selectedTemplate})</h3>
+                <div className="border-2 border-green-400 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900 aspect-square flex items-center justify-center">
+                  <img
+                    src={`data:${result?.compositeMimeType};base64,${result?.compositeImageBase64}`}
+                    alt={`${dogName} composite`}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-6 flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
           <span className="flex items-center gap-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Avg. time: ~15-25s
+            Avg. time: ~30-40s
           </span>
           <span className="flex items-center gap-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
