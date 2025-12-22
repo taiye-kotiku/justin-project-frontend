@@ -14,7 +14,6 @@ export function SingleImageGenerator() {
   const [dogName, setDogName] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [, setPreview] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
 
@@ -22,11 +21,6 @@ export function SingleImageGenerator() {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -42,35 +36,56 @@ export function SingleImageGenerator() {
       const reader = new FileReader();
       reader.readAsDataURL(imageFile);
       reader.onloadend = async () => {
-        const imageBase64 = (reader.result as string).split(',')[1];
+        try {
+          const imageBase64 = (reader.result as string).split(',')[1];
 
-        const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            dogName,
-            imageUrl: `data:${imageFile.type};base64,${imageBase64}`,
-            themes: ['A fun coloring book adventure'],
-            petHandle: instagramHandle
-          })
-        });
+          console.log('🚀 Generating single image...');
+          console.log('N8N_BASE_URL:', N8N_BASE_URL);
+          console.log('Webhook URL:', `${N8N_BASE_URL}/generate-single`);
 
-        const data = await response.json();
-        if (data.success && data.results[0]) {
-          const res = data.results[0];
-          setResult({
-            originalImageUrl: data.originalImageUrl,
-            generatedImageUrl: data.generatedImageUrl,
-            imageBase64: res.imageBase64,
-            mimeType: res.mimeType,
-            caption: res.caption
+          const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dogName,
+              imageUrl: `data:${imageFile.type};base64,${imageBase64}`,
+              themes: ['A fun coloring book adventure'],
+              petHandle: instagramHandle
+            })
           });
+
+          console.log('Response status:', response.status);
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          console.log('Response data:', data);
+
+          if (data.success && data.results?.[0]) {
+            const res = data.results[0];
+            setResult({
+              originalImageUrl: data.originalImageUrl,
+              generatedImageUrl: data.generatedImageUrl,
+              imageBase64: res.imageBase64,
+              mimeType: res.mimeType,
+              caption: res.caption
+            });
+            alert('✅ Generated successfully!');
+          } else {
+            throw new Error('Invalid response format: ' + JSON.stringify(data));
+          }
+        } catch (innerError) {
+          console.error('❌ Generation error:', innerError);
+          alert(`Generation failed: ${innerError instanceof Error ? innerError.message : 'Unknown error'}`);
+        } finally {
+          setIsGenerating(false);
         }
       };
     } catch (error) {
-      console.error('Error generating:', error);
-      alert('Generation failed');
-    } finally {
+      console.error('❌ File read error:', error);
+      alert('Failed to read file');
       setIsGenerating(false);
     }
   };
@@ -125,26 +140,36 @@ export function SingleImageGenerator() {
               Upload Photo <span className="text-red-500">*</span>
             </label>
             <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-purple-500 dark:hover:border-purple-500 transition-colors group cursor-pointer bg-gray-50 dark:bg-gray-900/50">
-              <div className="space-y-1 text-center">
+              <div className="space-y-1 text-center" onClick={() => document.getElementById('file-upload')?.click()}>
                 <svg className="mx-auto h-12 w-12 text-gray-400 group-hover:text-purple-500 transition-colors" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                   <path d="M28 8H12a4 4 0 00-4 4v20a4 4 0 004 4h24a4 4 0 004-4V20m-18-12l-4 4m4-4l4 4m-4-4v12" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <div className="flex text-sm text-gray-600 dark:text-gray-400 justify-center">
                   <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-purple-500 hover:text-purple-600">
                     <span>Upload a file</span>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="sr-only"
-                    />
                   </label>
                   <p className="pl-1">or drag and drop</p>
                 </div>
                 <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
               </div>
+              <input
+                id="file-upload"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  console.log('File input changed:', e.target.files);
+                  handleImageChange(e);
+                }}
+                className="hidden"
+              />
             </div>
+            {imageFile && (
+              <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  ✅ File selected: <strong>{imageFile.name}</strong> ({(imageFile.size / 1024 / 1024).toFixed(2)} MB)
+                </p>
+              </div>
+            )}
             <div className="mt-3 flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/50">
               <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
