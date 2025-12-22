@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { TemplateFieldsForm } from './TemplateFieldsForm';
 
-const N8N_BASE_URL = 'https://justgurian.app.n8n.cloud/webhook';
+const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || 'http://localhost:5678/webhook';
 
 interface GenerationResult {
   originalImageUrl: string;
