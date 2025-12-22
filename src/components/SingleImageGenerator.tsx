@@ -297,11 +297,19 @@ export function SingleImageGenerator() {
             <div>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Step 1: Coloring Page</h3>
               <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900 aspect-square flex items-center justify-center">
-                <img
-                  src={`data:${result?.mimeType};base64,${result?.imageBase64}`}
-                  alt={dogName}
-                  className="h-full w-full object-contain"
-                />
+                {result?.imageBase64 ? (
+                  <img
+                    src={`data:${result.mimeType || 'image/png'};base64,${result.imageBase64}`}
+                    alt={dogName}
+                    className="h-full w-full object-contain"
+                    onError={(e) => {
+                      console.error('Image load error:', e);
+                      console.log('Attempted src:', `data:${result.mimeType || 'image/png'};base64,${result.imageBase64?.substring(0, 50)}...`);
+                    }}
+                  />
+                ) : (
+                  <div className="text-center text-gray-500">No image generated yet</div>
+                )}
               </div>
             </div>
 
@@ -348,17 +356,115 @@ export function SingleImageGenerator() {
                 </button>
               </div>
             ) : (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Step 2: Marketing Composite ({selectedTemplate})</h3>
-                <div className="border-2 border-green-400 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900 aspect-square flex items-center justify-center">
-                  <img
-                    src={`data:${result?.compositeMimeType};base64,${result?.compositeImageBase64}`}
-                    alt={`${dogName} composite`}
-                    className="h-full w-full object-contain"
-                  />
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Step 2: Marketing Composite ({selectedTemplate})</h3>
+                  <div className="border-2 border-green-400 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-900 aspect-square flex items-center justify-center">
+                    {result?.compositeImageBase64 ? (
+                      <img
+                        src={`data:${result.compositeMimeType || 'image/png'};base64,${result.compositeImageBase64}`}
+                        alt={`${dogName} composite`}
+                        className="h-full w-full object-contain"
+                        onError={(e) => {
+                          console.error('Composite image load error:', e);
+                          console.log('Attempted src:', `data:${result.compositeMimeType || 'image/png'};base64,${result.compositeImageBase64?.substring(0, 50)}...`);
+                        }}
+                      />
+                    ) : result?.compositeImageUrl ? (
+                      <img
+                        src={result.compositeImageUrl}
+                        alt={`${dogName} composite`}
+                        className="h-full w-full object-contain"
+                        onError={(e) => {
+                          console.error('Composite URL image load error:', e);
+                          console.log('Attempted URL:', result.compositeImageUrl);
+                        }}
+                      />
+                    ) : (
+                      <div className="text-center text-gray-500">No composite generated yet</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      if (result?.compositeImageUrl) {
+                        const a = document.createElement('a');
+                        a.href = result.compositeImageUrl;
+                        a.download = `${dogName}-composite.png`;
+                        a.click();
+                      } else if (result?.compositeImageBase64) {
+                        const link = document.createElement('a');
+                        link.href = `data:${result.compositeMimeType || 'image/png'};base64,${result.compositeImageBase64}`;
+                        link.download = `${dogName}-composite.png`;
+                        link.click();
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Composite
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (!result?.compositeImageUrl && !result?.compositeImageBase64) {
+                        alert('No composite image to post');
+                        return;
+                      }
+                      try {
+                        const response = await fetch(`${N8N_BASE_URL}/post-marketing-image`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            dogName,
+                            compositeImageUrl: result.compositeImageUrl,
+                            compositeImageBase64: result.compositeImageBase64,
+                            caption: result.caption,
+                            template: selectedTemplate,
+                            instagramHandle
+                          })
+                        });
+
+                        if (response.ok) {
+                          const data = await response.json();
+                          console.log('Posted to Instagram:', data);
+                          alert('✅ Posted to Instagram!');
+                        } else {
+                          alert('Failed to post to Instagram');
+                        }
+                      } catch (error) {
+                        console.error('Post error:', error);
+                        alert(`Failed to post: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M18 5V3H2v2h16zM3 6h14v9H3V6zm0 4h14v-1H3v1zm0 2h14v-1H3v1z" />
+                    </svg>
+                    Post to Instagram
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setResult(null);
+                      setDogName('');
+                      setImageFile(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-base font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Another
+                  </button>
                 </div>
               </div>
-            )}
           </div>
         )}
 
