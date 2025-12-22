@@ -465,6 +465,7 @@ export function SingleImageGenerator() {
                   </button>
                 </div>
               </div>
+            )}
           </div>
         )}
 
