@@ -19,8 +19,6 @@ The frontend provides a user-friendly interface for:
 - **Schedule Management** - View scheduled posts and optimal posting times
 - **Real-time Status** - Track processing progress and posting status
 
----
-
 ## ⚡ Quick Start
 
 ### Prerequisites
