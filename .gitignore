@@ -224,3 +224,13 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 >>>>>>> 5e5179d6347c91d6b05d6025b598d6ae60e52e11
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
