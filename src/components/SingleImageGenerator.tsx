@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { TemplateFieldsForm } from './TemplateFieldsForm';
 
-const N8N_BASE_URL = import.meta.env.VITE_N8N_BASE_URL || 'http://localhost:5678/webhook';
+const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || 'https://justin-project-backend.onrender.com/api';
 
 interface GenerationResult {
   originalImageUrl: string;
@@ -151,7 +151,7 @@ export function SingleImageGenerator() {
     try {
       console.log('🎨 Generating coloring page for:', dogName);
 
-      const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/generate-single`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -220,7 +220,12 @@ export function SingleImageGenerator() {
 
       console.log('📤 Sending payload:', payload);
 
-      const response = await fetch(`${N8N_BASE_URL}/create-marketing-composite`, {
+      // Choose endpoint based on template
+      const endpoint = selectedTemplate === 'customizable' 
+        ? '/create-marketing-image' 
+        : '/generate-marketing-composite';
+
+      const response = await fetch(`${BACKEND_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -273,7 +278,7 @@ export function SingleImageGenerator() {
 
     try {
       console.log('📱 Posting to Instagram...');
-      const response = await fetch(`${N8N_BASE_URL}/post-to-instagram`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/post-to-instagram`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TemplateFieldsForm } from './TemplateFieldsForm';
 
-const N8N_BASE_URL = 'https://justgurian.app.n8n.cloud/webhook';
+const BACKEND_BASE_URL = 'https://justin-project-backend.onrender.com/api';
 
 interface BulkItem {
   id: string;
@@ -171,7 +171,7 @@ export function BulkImageGenerator() {
       try {
         console.log(`🎨 Generating coloring page for: ${item.dogName}`);
 
-        const response = await fetch(`${N8N_BASE_URL}/generate-single`, {
+        const response = await fetch(`${BACKEND_BASE_URL}/generate-single`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -248,7 +248,12 @@ export function BulkImageGenerator() {
           payload.backgroundColor = String(defaultTemplateFields.backgroundColor || '#FFFFFF');
         }
 
-        const response = await fetch(`${N8N_BASE_URL}/create-marketing-composite`, {
+        // Choose endpoint based on template
+        const endpoint = selectedTemplate === 'customizable' 
+          ? '/create-marketing-image' 
+          : '/generate-marketing-composite';
+
+        const response = await fetch(`${BACKEND_BASE_URL}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -306,7 +311,7 @@ export function BulkImageGenerator() {
       try {
         console.log(`📅 Scheduling post for ${item.dogName}...`);
 
-        const response = await fetch(`${N8N_BASE_URL}/post-to-instagram`, {
+        const response = await fetch(`${BACKEND_BASE_URL}/post-to-instagram`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
