@@ -169,17 +169,38 @@ export function SingleImageGenerator() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json() as ColoringPageResponse | N8nResponse<ColoringPageResponse>;
-      const data = unwrapN8nResponse(responseData);
+      const responseData = await response.json();
+      const data = unwrapN8nResponse(responseData as ColoringPageResponse | N8nResponse<ColoringPageResponse>);
 
-      if (data.success && data.originalImageUrl && data.generatedImageUrl) {
+      console.log('📊 Coloring page response:', data);
+
+      if (!data.success) {
+        throw new Error(data.error || 'Generation failed');
+      }
+
+      // Handle base64 response (new backend format)
+      if ((data as any).imageBase64 && (data as any).mimeType) {
+        const mimeType = (data as any).mimeType || 'image/png';
+        const base64 = (data as any).imageBase64;
+        const dataUrl = `data:${mimeType};base64,${base64}`;
+        
+        console.log('✅ Got base64 response, converting to data URL');
+        setResult({
+          originalImageUrl: dataUrl,  // Store the data URL
+          generatedImageUrl: dataUrl
+        });
+        alert('✅ Coloring page generated!');
+      }
+      // Handle URL-based response (legacy format)
+      else if (data.originalImageUrl && data.generatedImageUrl) {
+        console.log('✅ Got URL response');
         setResult({
           originalImageUrl: data.originalImageUrl,
           generatedImageUrl: data.generatedImageUrl
         });
         alert('✅ Coloring page generated!');
       } else {
-        throw new Error(data.error || 'Failed to generate coloring page');
+        throw new Error('Response missing required image data');
       }
     } catch (error) {
       console.error('❌ Generation error:', error);
@@ -201,10 +222,22 @@ export function SingleImageGenerator() {
       console.log('🎨 Generating marketing composite...');
       console.log('Template:', selectedTemplate);
 
+      // Extract base64 from data URLs if needed
+      let originalBase64 = result.originalImageUrl;
+      let generatedBase64 = result.generatedImageUrl;
+
+      if (originalBase64.startsWith('data:')) {
+        originalBase64 = originalBase64.split(',')[1];
+      }
+      if (generatedBase64.startsWith('data:')) {
+        generatedBase64 = generatedBase64.split(',')[1];
+      }
+
       const payload: Record<string, string | number | boolean | undefined> = {
         dogName: dogName.trim(),
-        originalImageUrl: result.originalImageUrl,
-        generatedImageUrl: result.generatedImageUrl,
+        originalImageBase64: originalBase64,
+        coloringPageBase64: generatedBase64,
+        mimeType: 'image/png',
         template: selectedTemplate
       };
 
@@ -218,7 +251,7 @@ export function SingleImageGenerator() {
         payload.backgroundColor = String(templateFields.backgroundColor || '#FFFFFF');
       }
 
-      console.log('📤 Sending payload:', payload);
+      console.log('📤 Sending payload with base64 data');
 
       // Choose endpoint based on template
       const endpoint = selectedTemplate === 'customizable' 
@@ -237,18 +270,32 @@ export function SingleImageGenerator() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json() as CompositeResponse | N8nResponse<CompositeResponse>;
-      const data = unwrapN8nResponse(responseData);
+      const responseData = await response.json();
+      const data = unwrapN8nResponse(responseData as CompositeResponse | N8nResponse<CompositeResponse>);
 
       console.log('Composite response:', data);
 
       if (data.success) {
-        setResult(prev => prev ? {
-          ...prev,
-          compositeImageUrl: data.compositeImageUrl || data.driveUrl || data.previewUrl,
-          compositeImageBase64: data.compositeImageBase64 || data.imageBase64,
-          compositeMimeType: data.compositeMimeType || data.mimeType || 'image/png'
-        } : null);
+        // Handle base64 response
+        if ((data as any).imageBase64 && (data as any).mimeType) {
+          const mimeType = (data as any).mimeType || 'image/png';
+          const base64 = (data as any).imageBase64;
+          const dataUrl = `data:${mimeType};base64,${base64}`;
+          
+          setResult(prev => prev ? {
+            ...prev,
+            compositeImageUrl: dataUrl,
+            compositeImageBase64: base64,
+            compositeMimeType: mimeType
+          } : null);
+        } else {
+          setResult(prev => prev ? {
+            ...prev,
+            compositeImageUrl: data.compositeImageUrl || data.driveUrl || data.previewUrl,
+            compositeImageBase64: data.compositeImageBase64 || data.imageBase64,
+            compositeMimeType: data.compositeMimeType || data.mimeType || 'image/png'
+          } : null);
+        }
         console.log('✅ Marketing composite generated!');
       } else {
         throw new Error('Failed to generate composite');

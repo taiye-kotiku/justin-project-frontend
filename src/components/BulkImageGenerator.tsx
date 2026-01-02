@@ -186,18 +186,40 @@ export function BulkImageGenerator() {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        const responseData = await response.json() as ColoringPageResponse | N8nResponse<ColoringPageResponse>;
-        const data = unwrapN8nResponse(responseData);
+        const responseData = await response.json();
+        const data = unwrapN8nResponse(responseData as ColoringPageResponse | N8nResponse<ColoringPageResponse>);
 
         if (data.success) {
-          setItems(prev => prev.map(i =>
-            i.id === item.id ? {
-              ...i,
-              status: 'ready',
-              originalImageUrl: data.originalImageUrl,
-              generatedImageUrl: data.generatedImageUrl
-            } : i
-          ));
+          // Handle base64 response (new backend format)
+          if ((data as any).imageBase64 && (data as any).mimeType) {
+            const mimeType = (data as any).mimeType || 'image/png';
+            const base64 = (data as any).imageBase64;
+            const dataUrl = `data:${mimeType};base64,${base64}`;
+            
+            setItems(prev => prev.map(i =>
+              i.id === item.id ? {
+                ...i,
+                status: 'ready',
+                originalImageUrl: dataUrl,
+                generatedImageUrl: dataUrl
+              } : i
+            ));
+          }
+          // Handle URL-based response (legacy format)
+          else if (data.originalImageUrl && data.generatedImageUrl) {
+            setItems(prev => prev.map(i =>
+              i.id === item.id ? {
+                ...i,
+                status: 'ready',
+                originalImageUrl: data.originalImageUrl,
+                generatedImageUrl: data.generatedImageUrl
+              } : i
+            ));
+          } else {
+            throw new Error('Response missing image data');
+          }
+        } else {
+          throw new Error(data.error || 'Generation failed');
         }
       } catch (error) {
         console.error(`Error for ${item.dogName}:`, error);
@@ -230,10 +252,22 @@ export function BulkImageGenerator() {
           throw new Error('Missing image URLs');
         }
 
+        // Extract base64 from data URLs if needed
+        let originalBase64 = item.originalImageUrl;
+        let generatedBase64 = item.generatedImageUrl;
+
+        if (originalBase64.startsWith('data:')) {
+          originalBase64 = originalBase64.split(',')[1];
+        }
+        if (generatedBase64.startsWith('data:')) {
+          generatedBase64 = generatedBase64.split(',')[1];
+        }
+
         const payload: Record<string, string | number | boolean | undefined> = {
           dogName: item.dogName,
-          originalImageUrl: item.originalImageUrl,
-          generatedImageUrl: item.generatedImageUrl,
+          originalImageBase64: originalBase64,
+          coloringPageBase64: generatedBase64,
+          mimeType: 'image/png',
           template: selectedTemplate,
           caption: item.caption
         };
@@ -263,18 +297,20 @@ export function BulkImageGenerator() {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        const responseData = await response.json() as CompositeResponse | N8nResponse<CompositeResponse>;
-        const data = unwrapN8nResponse(responseData);
+        const responseData = await response.json();
+        const data = unwrapN8nResponse(responseData as CompositeResponse | N8nResponse<CompositeResponse>);
 
         if (data.success) {
           setItems(prev => prev.map(i =>
             i.id === item.id ? {
               ...i,
               compositeStatus: 'ready',
-              compositeImage: `data:${data.compositeMimeType || data.mimeType || 'image/png'};base64,${data.compositeImageBase64 || data.imageBase64}`,
+              compositeImage: `data:${data.mimeType || data.compositeMimeType || 'image/png'};base64,${data.imageBase64 || data.compositeImageBase64}`,
               compositeImageUrl: data.compositeImageUrl || data.driveUrl || data.previewUrl
             } : i
           ));
+        } else {
+          throw new Error(data.error || 'Composite generation failed');
         }
       } catch (error) {
         console.error(`❌ Composite error for ${item.dogName}:`, error);
