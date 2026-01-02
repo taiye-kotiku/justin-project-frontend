@@ -115,6 +115,8 @@ export function SingleImageGenerator() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingComposite, setIsGeneratingComposite] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('customizable');
+  const [showCaptionModal, setShowCaptionModal] = useState(false);
+  const [captionText, setCaptionText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Template fields state
@@ -179,9 +181,10 @@ export function SingleImageGenerator() {
       }
 
       // Handle base64 response (new backend format)
-      if ((data as any).imageBase64 && (data as any).mimeType) {
-        const mimeType = (data as any).mimeType || 'image/png';
-        const base64 = (data as any).imageBase64;
+      const dataResponse = data as unknown as { imageBase64?: string; mimeType?: string };
+      if (dataResponse.imageBase64 && dataResponse.mimeType) {
+        const mimeType = dataResponse.mimeType || 'image/png';
+        const base64 = dataResponse.imageBase64;
         const dataUrl = `data:${mimeType};base64,${base64}`;
         
         console.log('✅ Got base64 response, converting to data URL');
@@ -277,9 +280,10 @@ export function SingleImageGenerator() {
 
       if (data.success) {
         // Handle base64 response
-        if ((data as any).imageBase64 && (data as any).mimeType) {
-          const mimeType = (data as any).mimeType || 'image/png';
-          const base64 = (data as any).imageBase64;
+        const dataResponse = data as unknown as { imageBase64?: string; mimeType?: string };
+        if (dataResponse.imageBase64 && dataResponse.mimeType) {
+          const mimeType = dataResponse.mimeType || 'image/png';
+          const base64 = dataResponse.imageBase64;
           const dataUrl = `data:${mimeType};base64,${base64}`;
           
           setResult(prev => prev ? {
@@ -308,20 +312,57 @@ export function SingleImageGenerator() {
     }
   };
 
+  const handleDownloadComposite = (): void => {
+    if (!result?.compositeImageBase64) {
+      alert('Please generate the composite first');
+      return;
+    }
+
+    try {
+      // Convert base64 to blob
+      const base64Data = result.compositeImageBase64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: result.compositeMimeType || 'image/png' });
+
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${dogName}-coloring-composite.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log('✅ Downloaded composite image');
+    } catch (error) {
+      console.error('❌ Download error:', error);
+      alert('Failed to download image');
+    }
+  };
+
+  const handleOpenCaptionModal = (): void => {
+    // Generate a nice default caption
+    const defaultCaption = `Meet ${dogName}! 🐾\n\nTransform your furry friend into a beautiful coloring book page! Perfect for art lovers and dog enthusiasts.\n\nGet your own custom dog coloring book at dogcoloringbooks.com 🎨\n\nCreated by @justgurian.ai & @quinngolds`;
+    setCaptionText(defaultCaption);
+    setShowCaptionModal(true);
+  };
+
   const handlePostToInstagram = async (): Promise<void> => {
     if (!result?.compositeImageUrl) {
       alert('Please generate the composite first');
       return;
     }
 
-    if (selectedTemplate === 'customizable' && !templateFields.arrowText) {
-      alert('Please fill in the caption before posting');
+    if (!captionText.trim()) {
+      alert('Please enter a caption');
       return;
     }
-
-    const caption = selectedTemplate === 'customizable' 
-      ? String(templateFields.arrowText)
-      : `Meet ${dogName}! 🐾 Get your own dog coloring book at dogcoloringbooks.com`;
 
     try {
       console.log('📱 Posting to Instagram...');
@@ -330,7 +371,7 @@ export function SingleImageGenerator() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageUrl: result.compositeImageUrl,
-          caption: caption
+          caption: captionText
         })
       });
 
@@ -343,6 +384,7 @@ export function SingleImageGenerator() {
 
       console.log('✅ Posted to Instagram!', data);
       alert('✅ Posted to Instagram successfully!');
+      setShowCaptionModal(false);
     } catch (error) {
       console.error('❌ Instagram post error:', error);
       alert(`Failed to post: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -353,6 +395,8 @@ export function SingleImageGenerator() {
     setDogName('');
     setResult(null);
     setSelectedTemplate('customizable');
+    setShowCaptionModal(false);
+    setCaptionText('');
     setTemplateFields({
       headerLine1: 'Get Your',
       headerLine2: 'Coloring Page',
@@ -567,19 +611,17 @@ export function SingleImageGenerator() {
             </div>
 
             <div className="grid grid-cols-1 gap-2">
-              <a
-                href={result.compositeImageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full block text-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+              <button
+                onClick={handleDownloadComposite}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
               >
                 💾 Download Composite
-              </a>
+              </button>
               <button
-                onClick={handlePostToInstagram}
+                onClick={handleOpenCaptionModal}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded-lg"
               >
-                📱 Post to Instagram
+                📱 Edit Caption & Post to Instagram
               </button>
               <button
                 onClick={handleReset}
@@ -591,6 +633,51 @@ export function SingleImageGenerator() {
           </div>
         </div>
       )}
+
+      {/* Caption Modal */}
+      {showCaptionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="p-6 space-y-4">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Edit Instagram Caption</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Review and edit your Instagram caption before posting</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Caption ({captionText.length}/2200 characters)
+                </label>
+                <textarea
+                  value={captionText}
+                  onChange={(e) => setCaptionText(e.target.value)}
+                  maxLength={2200}
+                  rows={8}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                  placeholder="Enter your Instagram caption..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setShowCaptionModal(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg"
+                >
+                  ❌ Cancel
+                </button>
+                <button
+                  onClick={handlePostToInstagram}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded-lg"
+                >
+                  ✅ Post to Instagram
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* End of main container */}
     </div>
   );
 }

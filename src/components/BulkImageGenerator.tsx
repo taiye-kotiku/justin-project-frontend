@@ -191,9 +191,10 @@ export function BulkImageGenerator() {
 
         if (data.success) {
           // Handle base64 response (new backend format)
-          if ((data as any).imageBase64 && (data as any).mimeType) {
-            const mimeType = (data as any).mimeType || 'image/png';
-            const base64 = (data as any).imageBase64;
+          const dataResponse = data as unknown as { imageBase64?: string; mimeType?: string };
+          if (dataResponse.imageBase64 && dataResponse.mimeType) {
+            const mimeType = dataResponse.mimeType || 'image/png';
+            const base64 = dataResponse.imageBase64;
             const dataUrl = `data:${mimeType};base64,${base64}`;
             
             setItems(prev => prev.map(i =>
